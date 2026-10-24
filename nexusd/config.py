@@ -144,15 +144,45 @@ def load_config(config_path: str | Path | None = None) -> NexusConfig:
     router_cfg = RouterConfig(prefer=router_prefer, timeout_seconds=timeout_seconds)
 
     # Build ModelConfig with env overrides
+    cloud_provider = os.getenv("NEXUS_CLOUD_PROVIDER", model_data.get("cloud_provider", "openai")).lower()
+
+    # Provider-aware default API endpoints
+    default_cloud_url = model_data.get("cloud_url", "https://api.openai.com/v1")
+    if cloud_provider == "openrouter" and "openai.com" in default_cloud_url:
+        default_cloud_url = "https://openrouter.ai/api/v1"
+    elif cloud_provider == "groq" and "openai.com" in default_cloud_url:
+        default_cloud_url = "https://api.groq.com/openai/v1"
+    elif cloud_provider in ("gemini", "google") and "openai.com" in default_cloud_url:
+        default_cloud_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+
+    cloud_url = os.getenv("NEXUS_CLOUD_URL", default_cloud_url)
+
+    # Provider-aware API key resolution (NEXUS_API_KEY or provider-specific key)
     cloud_key = os.getenv("NEXUS_API_KEY")
+    if not cloud_key:
+        if cloud_provider == "openrouter":
+            cloud_key = os.getenv("OPENROUTER_API_KEY")
+        elif cloud_provider == "groq":
+            cloud_key = os.getenv("GROQ_API_KEY")
+        elif cloud_provider in ("gemini", "google"):
+            cloud_key = os.getenv("GEMINI_API_KEY")
+        elif cloud_provider in ("anthropic", "claude"):
+            cloud_key = os.getenv("ANTHROPIC_API_KEY")
+
+    default_model = model_data.get("cloud_model", "gpt-4o-mini")
+    if cloud_provider == "openrouter" and default_model == "gpt-4o-mini":
+        default_model = "meta-llama/llama-3.2-3b-instruct:free"
+
+    cloud_model = os.getenv("NEXUS_CLOUD_MODEL", default_model)
+
     model_cfg = ModelConfig(
         local_type=os.getenv("NEXUS_LOCAL_TYPE", model_data.get("local_type", "ollama")),
         local_url=os.getenv("NEXUS_LOCAL_URL", model_data.get("local_url", "http://127.0.0.1:11434")),
         local_model=os.getenv("NEXUS_LOCAL_MODEL", model_data.get("local_model", "llama3.2:1b")),
         local_path=os.getenv("NEXUS_LOCAL_PATH", model_data.get("local_path", "")),
-        cloud_provider=os.getenv("NEXUS_CLOUD_PROVIDER", model_data.get("cloud_provider", "openai")),
-        cloud_url=os.getenv("NEXUS_CLOUD_URL", model_data.get("cloud_url", "https://api.openai.com/v1")),
-        cloud_model=os.getenv("NEXUS_CLOUD_MODEL", model_data.get("cloud_model", "gpt-4o-mini")),
+        cloud_provider=cloud_provider,
+        cloud_url=cloud_url,
+        cloud_model=cloud_model,
         cloud_api_key=cloud_key,
     )
 
