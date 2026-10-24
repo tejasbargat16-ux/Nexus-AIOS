@@ -63,6 +63,31 @@ def _find_default_config_path() -> Path:
     return repo_config
 
 
+def _load_dotenv() -> None:
+    """Load environment variables from .env file if present without overriding existing env."""
+    candidates = [
+        Path(__file__).resolve().parent.parent / ".env",
+        Path.home() / ".config" / "nexus" / ".env",
+        Path(".env"),
+    ]
+    for env_path in candidates:
+        if env_path.is_file():
+            try:
+                with open(env_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line or line.startswith("#") or "=" not in line:
+                            continue
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        v = v.strip().strip("'\"")
+                        if k and k not in os.environ:
+                            os.environ[k] = v
+                break
+            except OSError:
+                pass
+
+
 def load_config(config_path: str | Path | None = None) -> NexusConfig:
     """
     Load configuration from YAML file with environment variable overrides.
@@ -73,6 +98,7 @@ def load_config(config_path: str | Path | None = None) -> NexusConfig:
     Returns:
         NexusConfig: Validated system configuration object.
     """
+    _load_dotenv()
     target_path = Path(
         config_path
         or os.getenv("NEXUS_CONFIG_PATH")
