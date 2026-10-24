@@ -1,0 +1,226 @@
+﻿# ==============================================================================
+#  NEXUS AIOS - Production-Grade Git Ignore Specification
+#  Architected for: Python 3.x, Linux OS/Kernel Live-Builds, AI Daemons, & Hybrid Dev
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. CRITICAL REPOSITORY SAFEGUARDS (DO NOT REMOVE)
+# ------------------------------------------------------------------------------
+# NOTE: Nexus AIOS maintains a tracked `/build` directory with build automation scripts,
+# Dockerfiles, and live-build configurations. Standard generic Python .gitignore rules
+# that ignore `build/` WILL BREAK the repository.
+# We explicitly allow the repository's build source folder:
+!/build/
+!/build/**
+
+# ------------------------------------------------------------------------------
+# 2. OPERATING SYSTEM & IMAGE BUILD ARTIFACTS
+# ------------------------------------------------------------------------------
+# Live-build output directory and final release distributions
+out/
+dist/
+target/
+
+# Bootable images and virtual disks
+*.iso
+*.img
+*.qcow2
+*.vmdk
+*.vdi
+*.raw
+*.squashfs
+*.initrd
+*.vmlinuz
+
+# Debian live-build scratch and chroot staging directories
+.build/
+binary/
+chroot/
+live-image-*.hybrid.iso
+cache/packages.binary/
+cache/packages.chroot/
+
+# Temporary mounts and unpack directories
+mnt/
+rootfs/
+tmp/
+
+# ------------------------------------------------------------------------------
+# 3. AI / LLM MODELS, VECTOR EMBEDDINGS & MEMORY
+# ------------------------------------------------------------------------------
+# Offline LLM weights and model checkpoints (GGUF, Safetensors, PyTorch, ONNX)
+models/
+weights/
+checkpoints/
+*.gguf
+*.safetensors
+*.bin
+*.onnx
+*.pt
+*.pth
+
+# SQLite runtime databases, journals, write-ahead logs, and memory dumps
+nexusd/memory/*.db
+nexusd/memory/*.sqlite*
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Vector databases & index caches
+chroma/
+faiss/
+embeddings_cache/
+*.lance
+*.duckdb
+
+# ------------------------------------------------------------------------------
+# 4. DAEMON RUNTIME, IPC & LOGS
+# ------------------------------------------------------------------------------
+# Logging & audit trails (preserve directory structure via README / .gitkeep)
+logs/*
+!logs/README.md
+!logs/.gitkeep
+*.log
+*.log.*
+
+# Unix domain sockets, lockfiles, and process identifiers
+*.sock
+*.pid
+nexusd.sock
+nexusd.pid
+*.ipc
+*.lock
+
+# ------------------------------------------------------------------------------
+# 5. ENVIRONMENT VARIABLES, SECRETS & CREDENTIALS
+# ------------------------------------------------------------------------------
+# Local environment configs (API keys for Claude, OpenAI, DeepSeek, etc.)
+.env
+.env.*
+!.env.example
+!.env.template
+!.env.test
+
+# Cryptographic private keys, certificates, and auth tokens
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
+id_rsa*
+secrets.yaml
+credentials.json
+service-account*.json
+
+# ------------------------------------------------------------------------------
+# 6. PYTHON RUNTIME & PACKAGE ARTIFACTS
+# ------------------------------------------------------------------------------
+# Bytecode and JIT caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments (Termux, Linux, Windows, macOS)
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# Packaging artifacts (isolated to package build trees, keeping /build safe)
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+wheels/
+*.whl
+
+# Pyinstaller / cx_Freeze / nuitka artifacts
+*.manifest
+*.spec
+
+# ------------------------------------------------------------------------------
+# 7. TESTING, STATIC ANALYSIS & CODE COVERAGE
+# ------------------------------------------------------------------------------
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.ruff_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+reports/
+coverage.xml
+
+# ------------------------------------------------------------------------------
+# 8. FRONTEND & UI (CLI / TUI / WEB)
+# ------------------------------------------------------------------------------
+# In case dev dependencies, bundlers, or test harnesses are used in ui/web
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.parcel-cache/
+
+# ------------------------------------------------------------------------------
+# 9. IDE & DEVELOPER ENVIRONMENT ARTIFACTS
+# ------------------------------------------------------------------------------
+# VS Code / VSCodium (ignore workspace states, keep recommended extensions/settings if desired)
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# JetBrains (PyCharm, IntelliJ)
+.idea/
+
+# Vim, Neovim, Nano, Emacs swap and backup files
+*~
+*.swp
+*.swo
+.#*
+*.bak
+
+# ------------------------------------------------------------------------------
+# 10. HOST OPERATING SYSTEM NOISE
+# ------------------------------------------------------------------------------
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Termux / Android / Linux shell history in working dirs
+.bash_history
+.zsh_history
+.python_history
+core
+core.*
+
+# Archives and compressed bundles
+*.zip
+*.tar
+*.tar.*
+*.gz

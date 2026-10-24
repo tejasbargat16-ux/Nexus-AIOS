@@ -1,0 +1,24 @@
+# Nexus AIOS Configuration (Phase 1)
+# System configuration for nexusd daemon and LLM routing layer.
+
+api:
+  host: "127.0.0.1"
+  port: 8765
+  debug: false
+
+router:
+  prefer: "local"            # Preferred provider: 'local' | 'cloud'
+  timeout_seconds: 15        # Timeout per provider request before fallback
+
+model:
+  # Local inference settings (Ollama or llama.cpp HTTP server)
+  local_type: "ollama"       # Options: 'ollama' | 'llamacpp'
+  local_url: "http://127.0.0.1:11434"
+  local_model: "llama3.2:1b"
+  local_path: "~/models/model.gguf"
+
+  # Cloud inference settings
+  cloud_provider: "openai"   # Options: 'openai' | 'anthropic' | 'groq' | 'openrouter'
+  cloud_url: "https://api.openai.com/v1"
+  cloud_model: "gpt-4o-mini"
+  # Note: Never commit API keys. Keys are read strictly from NEXUS_API_KEY environment variable.
