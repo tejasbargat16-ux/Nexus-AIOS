@@ -1,0 +1,41 @@
+# Nexus AIOS Security & Permission Policy (Phase 2)
+# Controls access levels for all AI-planned tool executions.
+#
+# Levels:
+#   allow   - Silently executed (read-only, non-destructive, safe operations)
+#   confirm - Requires explicit user confirmation before executing (changes state, installs, deletes)
+#   deny    - Strictly forbidden from execution (dangerous operations, destructive commands)
+
+default: confirm
+
+rules:
+  # Files Tool
+  files.read: allow
+  files.list: allow
+  files.search: allow
+  files.zip: allow
+  files.write: confirm
+  files.move: confirm
+  files.delete: confirm
+
+  # Apps Tool
+  apps.list: allow
+  apps.launch: confirm
+  apps.close: confirm
+
+  # Network Tool
+  network.connectivity: allow
+  network.ip_info: allow
+  network.notification: allow
+  network.download: confirm
+
+  # Packages Tool
+  packages.check: allow
+  packages.install: confirm
+  packages.update: confirm
+
+  # System & Restricted Actions (Always Denied)
+  system.format: deny
+  system.raw_shell: deny
+  system.poweroff: confirm
+  system.reboot: confirm

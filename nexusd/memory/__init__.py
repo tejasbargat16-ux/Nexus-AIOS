@@ -1,5 +1,9 @@
-﻿"""
+"""
 Nexus AIOS Memory Package.
 
-Placeholder package for Phase 2 long-term memory and vector search.
+Provides SQLite persistence and context recall for facts and conversational history.
 """
+
+from nexusd.memory.store import MemoryStore
+
+__all__ = ["MemoryStore"]

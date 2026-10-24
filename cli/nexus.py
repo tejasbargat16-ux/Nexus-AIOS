@@ -1,13 +1,15 @@
 """
-Nexus AIOS CLI Terminal (Phase 1).
+Nexus AIOS CLI Terminal (Phase 2).
 
 Interactive natural-language terminal for communicating with the nexusd daemon.
-Supports one-off commands and interactive conversational mode with local/cloud routing flags.
+Supports one-off commands, interactive conversational mode with local/cloud routing flags,
+tools inspection, memory facts inspection, and interactive permission confirmation.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from typing import Any
@@ -53,6 +55,16 @@ def parse_arguments() -> argparse.Namespace:
         action="store_true",
         help="Display daemon status and active LLM configuration",
     )
+    parser.add_argument(
+        "--tools",
+        action="store_true",
+        help="List all tools registered in nexusd",
+    )
+    parser.add_argument(
+        "--facts",
+        action="store_true",
+        help="Display stored memory facts and user preferences",
+    )
     return parser.parse_args()
 
 
@@ -61,7 +73,12 @@ def get_base_url(host: str, port: int) -> str:
     return f"http://{host}:{port}"
 
 
-def send_intent(base_url: str, text: str, prefer: str | None = None) -> dict[str, Any] | None:
+def send_intent(
+    base_url: str,
+    text: str,
+    prefer: str | None = None,
+    confirmed: bool = False,
+) -> dict[str, Any] | None:
     """
     Send natural language intent to nexusd daemon.
 
@@ -69,19 +86,36 @@ def send_intent(base_url: str, text: str, prefer: str | None = None) -> dict[str
         base_url: nexusd API base URL.
         text: Natural language user input.
         prefer: Optional provider override ('local' | 'cloud').
+        confirmed: Flag indicating user approved action if prompted.
 
     Returns:
         dict: Parsed API response or None on failure.
     """
-    payload: dict[str, Any] = {"text": text}
+    payload: dict[str, Any] = {"text": text, "confirmed": confirmed}
     if prefer:
         payload["prefer"] = prefer
 
     try:
         resp = requests.post(f"{base_url}/intent", json=payload, timeout=30)
+        data = resp.json()
+
+        # Handle pending confirmation
+        if data.get("status") == "confirmation_required":
+            action = data.get("action", "unknown")
+            params = data.get("params", {})
+            print(f"\n[Security Guard] Action '{action}' requires user confirmation.")
+            print(f"Parameters: {json.dumps(params, indent=2)}")
+            choice = input(f"Authorize execution of '{action}'? [y/N]: ").strip().lower()
+            if choice in ("y", "yes"):
+                return send_intent(base_url, text, prefer=prefer, confirmed=True)
+            else:
+                print("Action declined by user.\n")
+                return {"reply": f"Action '{action}' cancelled by user.", "provider": "guard"}
+
         if resp.status_code == 200:
-            return resp.json()
-        error_msg = resp.json().get("error", resp.text)
+            return data
+
+        error_msg = data.get("error", resp.text)
         print(f"\n[Error {resp.status_code}] {error_msg}\n", file=sys.stderr)
         return None
     except requests.exceptions.ConnectionError:
@@ -104,18 +138,60 @@ def show_status(base_url: str) -> None:
         if resp.status_code == 200:
             data = resp.json()
             print("==> Nexus AIOS Daemon Status")
-            print(f"  Service:  {data.get('service')} (v{data.get('version')})")
-            print(f"  Status:   {data.get('status')}")
-            print(f"  Uptime:   {data.get('uptime_seconds')}s")
+            print(f"  Service:    {data.get('service')} (v{data.get('version')})")
+            print(f"  Status:     {data.get('status')}")
+            print(f"  Uptime:     {data.get('uptime_seconds')}s")
+            comps = data.get("components", {})
+            if comps:
+                print(f"  Tools:      {comps.get('tools_registered')} registered")
+                print(f"  Memory:     {comps.get('stored_facts')} facts recorded")
+                print(f"  Policies:   {comps.get('permission_rules')} security rules")
             providers = data.get("providers", {})
-            print(f"  Preferred Provider: {providers.get('preferred')}")
+            print(f"  Preferred:  {providers.get('preferred')}")
             local = providers.get("local", {})
-            print(f"  Local:    {local.get('type')} @ {local.get('url')} ({local.get('model')})")
+            print(f"  Local:      {local.get('type')} @ {local.get('url')} ({local.get('model')})")
             cloud = providers.get("cloud", {})
             cloud_state = "Configured" if cloud.get("configured") else "No API Key Set"
-            print(f"  Cloud:    {cloud.get('provider')} ({cloud.get('model')}) [{cloud_state}]")
+            print(f"  Cloud:      {cloud.get('provider')} ({cloud.get('model')}) [{cloud_state}]")
         else:
             print(f"[Error] Failed to get status: {resp.status_code}")
+    except requests.exceptions.ConnectionError:
+        print(f"[Error] nexusd is not running at {base_url}.")
+
+
+def show_tools(base_url: str) -> None:
+    """Fetch and print registered tools catalog."""
+    try:
+        resp = requests.get(f"{base_url}/tools", timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            tools = data.get("tools", [])
+            print(f"==> Nexus Registered Tools ({len(tools)} available)")
+            print(f"{'Action':<25} {'Description':<50}")
+            print("-" * 75)
+            for t in tools:
+                print(f"{t.get('action'):<25} {t.get('description', '')[:48]:<50}")
+        else:
+            print(f"[Error] Failed to list tools: {resp.status_code}")
+    except requests.exceptions.ConnectionError:
+        print(f"[Error] nexusd is not running at {base_url}.")
+
+
+def show_facts(base_url: str) -> None:
+    """Fetch and print stored memory facts."""
+    try:
+        resp = requests.get(f"{base_url}/memory/facts", timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            facts = data.get("facts", [])
+            print(f"==> Nexus Memory Facts ({len(facts)} stored)")
+            if not facts:
+                print("  No facts recorded yet.")
+                return
+            for f in facts:
+                print(f"  [{f.get('category', 'general')}] {f.get('key')}: {f.get('value')}")
+        else:
+            print(f"[Error] Failed to list memory facts: {resp.status_code}")
     except requests.exceptions.ConnectionError:
         print(f"[Error] nexusd is not running at {base_url}.")
 
@@ -123,7 +199,7 @@ def show_status(base_url: str) -> None:
 def run_interactive_loop(base_url: str, prefer: str | None) -> None:
     """Run interactive REPL terminal session."""
     mode_tag = f" [{prefer}]" if prefer else ""
-    print(f"Nexus AIOS CLI (Phase 1){mode_tag}")
+    print(f"Nexus AIOS CLI (Phase 2){mode_tag}")
     print("Type your intent or 'exit' / 'quit' to close. Use Ctrl+C to cancel line.")
     print("-" * 55)
 
@@ -141,7 +217,12 @@ def run_interactive_loop(base_url: str, prefer: str | None) -> None:
             result = send_intent(base_url, user_input, prefer=prefer)
             if result:
                 provider_tag = f"[{result.get('provider', 'ai')}]"
-                print(f"\n{provider_tag} {result.get('reply')}\n")
+                reply = result.get("reply", "")
+                print(f"\n{provider_tag} {reply}")
+                tool_res = result.get("tool_result")
+                if tool_res:
+                    print(f"[Tool Result] {json.dumps(tool_res, indent=2)}")
+                print()
 
         except (KeyboardInterrupt, EOFError):
             print("\nExiting Nexus CLI. Goodbye!")
@@ -161,6 +242,14 @@ def main() -> None:
 
     if args.status:
         show_status(base_url)
+        sys.exit(0)
+
+    if args.tools:
+        show_tools(base_url)
+        sys.exit(0)
+
+    if args.facts:
+        show_facts(base_url)
         sys.exit(0)
 
     if args.once:

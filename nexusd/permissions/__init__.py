@@ -1,5 +1,9 @@
-﻿"""
+"""
 Nexus AIOS Permission Engine Package.
 
-Placeholder package for Phase 2 security policy evaluation.
+Provides policy evaluation and authorization guards for system tool actions.
 """
+
+from nexusd.permissions.engine import PermissionEngine
+
+__all__ = ["PermissionEngine"]

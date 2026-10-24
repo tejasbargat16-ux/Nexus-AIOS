@@ -1,4 +1,4 @@
-﻿"""
+"""
 Nexus AIOS Daemon Entrypoint.
 
 Starts the nexusd daemon, initializes the router, and serves the HTTP API.
@@ -27,7 +27,7 @@ logger = logging.getLogger("nexusd")
 
 def main() -> None:
     """Main execution entrypoint for nexusd."""
-    logger.info("Initializing Nexus AIOS Daemon (Phase 1)...")
+    logger.info("Initializing Nexus AIOS Daemon (Phase 2)...")
 
     try:
         config = load_config()
