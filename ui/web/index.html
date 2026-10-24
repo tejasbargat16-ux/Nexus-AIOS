@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus AIOS | Autonomous Operating System Console</title>
+  <meta name="description" content="Nexus AIOS Web Console - Natural Language Intent Terminal, Autonomous Tool Dispatcher, and Memory Management.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand-section">
+        <div class="logo-mark">
+          <span class="logo-core"></span>
+          <span class="logo-ring"></span>
+        </div>
+        <div class="brand-titles">
+          <h1 class="brand-name">NEXUS <span>AIOS</span></h1>
+          <span class="brand-sub">Autonomous Operating System Kernel v0.2.0</span>
+        </div>
+      </div>
+
+      <div class="header-status-group">
+        <div class="status-pill" id="daemon-status-pill">
+          <span class="pulse-dot"></span>
+          <span id="daemon-status-text">Connecting...</span>
+        </div>
+        <div class="provider-pill" id="provider-pill">
+          <span class="provider-icon">⚡</span>
+          <span id="provider-name">Router: Auto</span>
+        </div>
+        <div class="uptime-badge" id="uptime-badge" title="Daemon Uptime">
+          ⏱️ <span id="uptime-text">--s</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Workspace Layout -->
+    <div class="workspace-layout">
+      <!-- Navigation Sidebar / Mobile Bar -->
+      <nav class="nav-sidebar">
+        <button class="nav-tab active" id="tab-btn-chat" data-tab="chat">
+          <span class="nav-icon">💬</span>
+          <span class="nav-label">Intent Console</span>
+        </button>
+        <button class="nav-tab" id="tab-btn-tools" data-tab="tools">
+          <span class="nav-icon">🛠️</span>
+          <span class="nav-label">Tools Catalog</span>
+          <span class="nav-badge" id="tools-count-badge">17</span>
+        </button>
+        <button class="nav-tab" id="tab-btn-memory" data-tab="memory">
+          <span class="nav-icon">🧠</span>
+          <span class="nav-label">Memory Store</span>
+          <span class="nav-badge" id="facts-count-badge">0</span>
+        </button>
+        <button class="nav-tab" id="tab-btn-audit" data-tab="audit">
+          <span class="nav-icon">🛡️</span>
+          <span class="nav-label">Security & Audit</span>
+        </button>
+      </nav>
+
+      <!-- Content Views Container -->
+      <main class="main-content">
+        <!-- 1. CHAT / INTENT VIEW -->
+        <section class="tab-pane active" id="pane-chat">
+          <div class="chat-container">
+            <div class="chat-messages" id="chat-messages">
+              <!-- Welcome Greeting Card -->
+              <div class="message-card system-welcome">
+                <div class="welcome-header">
+                  <div class="ai-avatar">Ψ</div>
+                  <div>
+                    <h3>Nexus Core Initialized</h3>
+                    <p>Natural language intent engine ready with safe tool execution and persistent memory.</p>
+                  </div>
+                </div>
+                <div class="quick-prompts">
+                  <button class="prompt-chip" data-prompt="check network connectivity">🌐 Check Network</button>
+                  <button class="prompt-chip" data-prompt="list files in current directory">📁 List Files</button>
+                  <button class="prompt-chip" data-prompt="query local IP address and hostname">💻 Query IP & Host</button>
+                  <button class="prompt-chip" data-prompt="Who are you and what tools do you have?">🤖 System Introspection</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Input Bar -->
+            <form class="chat-input-bar" id="chat-form">
+              <div class="input-routing-control">
+                <select id="route-selector" title="LLM Execution Target">
+                  <option value="cloud">Cloud (OpenRouter)</option>
+                  <option value="local">Local (Ollama/llama.cpp)</option>
+                </select>
+              </div>
+              <input
+                type="text"
+                id="intent-input"
+                class="intent-input"
+                placeholder="Enter intent (e.g. 'read README.md', 'check connectivity', 'query IP')..."
+                autocomplete="off"
+                required
+              />
+              <button type="submit" class="send-btn" id="send-intent-btn">
+                <span>Send</span>
+                <span class="send-icon">➤</span>
+              </button>
+            </form>
+          </div>
+        </section>
+
+        <!-- 2. TOOLS CATALOG VIEW -->
+        <section class="tab-pane" id="pane-tools">
+          <div class="section-header">
+            <div>
+              <h2>Registered AI Tools</h2>
+              <p>Safe sandboxed interfaces for system control, storage, and networking.</p>
+            </div>
+            <div class="search-box">
+              <input type="text" id="tool-search" placeholder="Filter tools (e.g. files, apps, network)..." />
+            </div>
+          </div>
+          <div class="tools-grid" id="tools-grid">
+            <!-- Dynamically populated tool cards -->
+          </div>
+        </section>
+
+        <!-- 3. MEMORY STORE VIEW -->
+        <section class="tab-pane" id="pane-memory">
+          <div class="section-header">
+            <div>
+              <h2>Persistent Memory & Preferences</h2>
+              <p>Contextual SQLite facts and long-term knowledge retained across reboots.</p>
+            </div>
+            <button class="btn-primary" id="open-add-fact-modal">+ Add New Fact</button>
+          </div>
+
+          <div class="memory-search-bar">
+            <input type="text" id="memory-search-input" placeholder="Search memory (e.g. wifi, user preferences)..." />
+            <button class="btn-secondary" id="memory-search-btn">Search</button>
+          </div>
+
+          <div class="facts-list" id="facts-list">
+            <!-- Dynamically populated facts -->
+          </div>
+        </section>
+
+        <!-- 4. SECURITY & AUDIT VIEW -->
+        <section class="tab-pane" id="pane-audit">
+          <div class="section-header">
+            <div>
+              <h2>Audit & Security Log</h2>
+              <p>Cryptographically traceable append-only log of every intent and tool execution.</p>
+            </div>
+            <button class="btn-secondary" id="refresh-audit-btn">↻ Refresh Log</button>
+          </div>
+          <div class="audit-stream" id="audit-stream">
+            <!-- Dynamically populated audit entries -->
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- Modal: Direct Tool Execution -->
+  <div class="modal-backdrop" id="tool-exec-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-tool-name">Execute Tool</h3>
+        <button class="modal-close" id="close-tool-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <p id="modal-tool-desc" class="modal-tool-desc"></p>
+        <div id="modal-params-container" class="params-fields"></div>
+        <div class="modal-output" id="modal-output-box">
+          <div class="output-label">Result:</div>
+          <pre id="modal-tool-output">Awaiting execution...</pre>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="modal-cancel-btn">Close</button>
+        <button class="btn-primary" id="modal-run-btn">Execute Action</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Add Fact -->
+  <div class="modal-backdrop" id="add-fact-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Add Memory Fact</h3>
+        <button class="modal-close" id="close-fact-modal">✕</button>
+      </div>
+      <form id="add-fact-form" class="modal-body">
+        <div class="form-group">
+          <label for="fact-key">Key Identifier</label>
+          <input type="text" id="fact-key" placeholder="e.g. user.preferred_editor" required />
+        </div>
+        <div class="form-group">
+          <label for="fact-value">Value</label>
+          <input type="text" id="fact-value" placeholder="e.g. nano" required />
+        </div>
+        <div class="form-group">
+          <label for="fact-category">Category</label>
+          <input type="text" id="fact-category" placeholder="preference, hardware, general" value="preference" required />
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" id="cancel-fact-btn">Cancel</button>
+          <button type="submit" class="btn-primary">Save Fact</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -11,8 +11,9 @@ import json
 import logging
 import re
 import time
+from pathlib import Path
 from typing import Any
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 
 from nexusd.audit import audit_logger
 from nexusd.config import NexusConfig, load_config
@@ -76,11 +77,25 @@ def create_app(
     Returns:
         Flask: Configured application instance.
     """
-    app = Flask("nexusd")
+    web_dir = Path(__file__).resolve().parent.parent / "ui" / "web"
+    app = Flask("nexusd", static_folder=str(web_dir), static_url_path="")
     cfg = config or load_config()
     llm_router = router or LLMRouter(cfg)
     perm_engine = permissions or PermissionEngine()
     mem_store = memory or MemoryStore()
+
+    @app.route("/", methods=["GET"])
+    def index() -> Any:
+        """Serve responsive web UI."""
+        index_file = web_dir / "index.html"
+        if index_file.is_file():
+            return send_from_directory(str(web_dir), "index.html")
+        return jsonify({
+            "service": "nexusd",
+            "status": "ok",
+            "version": "0.2.0-phase2",
+            "ui": "http://127.0.0.1:8765/index.html",
+        }), 200
 
     @app.route("/status", methods=["GET"])
     def get_status() -> Any:
