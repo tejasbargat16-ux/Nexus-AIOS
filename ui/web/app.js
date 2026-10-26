@@ -1,6 +1,7 @@
 /**
- * NEXUS AIOS - WEB CONSOLE APPLICATION
- * Client-side Controller for API, Intent Planning, Tools, and Memory.
+ * NEXUS AIOS - WEB CONSOLE APPLICATION (Phase 3)
+ * Client-side Controller for Intent Planning, Tools, Persistent Memory,
+ * Autonomous Task Scheduler, and Proactive Security Guard.
  */
 
 const API_BASE = ""; // Relative to host
@@ -13,10 +14,12 @@ let currentTools = [];
 document.addEventListener("DOMContentLoaded", () => {
   initTabs();
   initChat();
+  initGuard();
+  initScheduler();
   initTools();
   initMemory();
   initAudit();
-  
+
   // Start background status poll
   pollStatus();
   setInterval(pollStatus, 4000);
@@ -37,6 +40,8 @@ function initTabs() {
       if (activePane) activePane.classList.add("active");
 
       // Load tab-specific data on activation
+      if (target === "guard") loadGuardData();
+      if (target === "scheduler") loadScheduledTasks();
       if (target === "tools") loadToolsCatalog();
       if (target === "memory") loadMemoryFacts();
       if (target === "audit") loadAuditStream();
@@ -71,14 +76,32 @@ async function pollStatus() {
       uptimeEl.textContent = `${Math.round(data.uptime_seconds)}s`;
     }
 
-    // Update Badges
+    // Update Badges & Guard Pill
     const toolsBadge = document.getElementById("tools-count-badge");
-    if (data.components?.tools_registered) {
+    if (data.components?.tools_registered !== undefined) {
       toolsBadge.textContent = data.components.tools_registered;
     }
+
     const factsBadge = document.getElementById("facts-count-badge");
     if (data.components?.stored_facts !== undefined) {
       factsBadge.textContent = data.components.stored_facts;
+    }
+
+    const tasksBadge = document.getElementById("tasks-count-badge");
+    if (data.components?.scheduled_tasks !== undefined) {
+      tasksBadge.textContent = data.components.scheduled_tasks;
+    }
+
+    const score = data.components?.security_score ?? 100;
+    const level = data.components?.security_level || "optimal";
+    const guardBadge = document.getElementById("guard-score-badge");
+    if (guardBadge) guardBadge.textContent = `${score}%`;
+
+    const guardPillText = document.getElementById("guard-pill-text");
+    const guardPill = document.getElementById("guard-status-pill");
+    if (guardPillText) {
+      guardPillText.textContent = `${score}% ${level.charAt(0).toUpperCase() + level.slice(1)}`;
+      guardPill.className = `guard-pill ${level}`;
     }
   } catch (err) {
     const pillText = document.getElementById("daemon-status-text");
@@ -169,10 +192,10 @@ function appendMessage(role, text, meta = {}) {
     toolHtml = `
       <div class="tool-result-box">
         <div class="tool-header-tag">
-          <span>⚡ Tool Executed</span>
-          <span>${meta.tool_result.status || "ok"}</span>
+          <span>⚡ Tool Executed: <strong>${escapeHtml(meta.tool_result.action || "")}</strong></span>
+          <span class="status-badge ${meta.tool_result.status === "ok" ? "ok" : "err"}">${meta.tool_result.status || "ok"}</span>
         </div>
-        <pre>${escapeHtml(JSON.stringify(meta.tool_result, null, 2))}</pre>
+        <pre>${escapeHtml(JSON.stringify(meta.tool_result.result, null, 2))}</pre>
       </div>
     `;
   }
@@ -193,13 +216,17 @@ function appendConfirmationCard(data, originalText, prefer) {
   const card = document.createElement("div");
   card.className = "message-card ai";
 
+  const guard = data.guard || {};
+  const actionName = guard.action || data.action || "restricted_action";
+  const params = guard.params || data.params || {};
+
   card.innerHTML = `
     <div class="security-confirm-card">
       <div class="confirm-title">
         <span>⚠️ Security Guard Authorization Required</span>
       </div>
-      <p>The AI planned to execute action <strong>${escapeHtml(data.action)}</strong> with parameters:</p>
-      <pre style="margin: 8px 0; background: rgba(0,0,0,0.4); padding: 8px; border-radius: 4px; font-size: 0.8rem;">${escapeHtml(JSON.stringify(data.params, null, 2))}</pre>
+      <p>The system planned to execute protected action <strong>${escapeHtml(actionName)}</strong>:</p>
+      <pre style="margin: 8px 0; background: rgba(0,0,0,0.5); padding: 8px; border-radius: 4px; font-size: 0.8rem;">${escapeHtml(JSON.stringify(params, null, 2))}</pre>
       <div class="confirm-actions">
         <button class="btn-approve" id="approve-btn">Approve & Execute</button>
         <button class="btn-decline" id="decline-btn">Decline</button>
@@ -218,7 +245,7 @@ function appendConfirmationCard(data, originalText, prefer) {
 
   card.querySelector("#decline-btn").addEventListener("click", () => {
     card.remove();
-    appendMessage("ai", `Action '${data.action}' was declined by user.`, { provider: "guard" });
+    appendMessage("ai", `Action '${actionName}' was declined by user.`, { provider: "guard" });
   });
 }
 
@@ -230,7 +257,7 @@ function appendLoading() {
   card.className = "message-card ai";
   card.innerHTML = `
     <div class="message-meta"><span class="meta-provider">Processing Intent...</span></div>
-    <div class="pulse-dot" style="display: inline-block;"></div> Thinking...
+    <div class="pulse-dot" style="display: inline-block;"></div> Planning & Checking Permissions...
   `;
   container.appendChild(card);
   container.scrollTop = container.scrollHeight;
@@ -243,7 +270,289 @@ function removeMessage(id) {
 }
 
 // =============================================================================
-// 2. Tools Catalog & Direct Execution
+// 2. Security Guard (Phase 3)
+// =============================================================================
+
+function initGuard() {
+  document.getElementById("run-guard-scan-btn").addEventListener("click", async () => {
+    const btn = document.getElementById("run-guard-scan-btn");
+    btn.disabled = true;
+    btn.textContent = "Scanning...";
+    try {
+      await fetch(`${API_BASE}/guard/scan`, { method: "POST" });
+      await loadGuardData();
+    } catch (err) {
+      alert(`Scan failed: ${err.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "⚡ Run Security Scan";
+    }
+  });
+
+  document.getElementById("clear-alerts-btn").addEventListener("click", async () => {
+    try {
+      await fetch(`${API_BASE}/guard/alerts/clear`, { method: "POST" });
+      await loadGuardData();
+    } catch (err) {
+      alert(`Clear failed: ${err.message}`);
+    }
+  });
+}
+
+async function loadGuardData() {
+  try {
+    const [statusRes, alertsRes] = await Promise.all([
+      fetch(`${API_BASE}/guard/status`),
+      fetch(`${API_BASE}/guard/alerts?limit=20`),
+    ]);
+
+    const statusData = await statusRes.json();
+    const alertsData = await alertsRes.json();
+
+    const posture = statusData.posture || statusData;
+    const score = posture.score ?? 100;
+    const level = posture.level || "optimal";
+    const metrics = posture.metrics || {};
+    const alerts = alertsData.alerts || [];
+
+    // Update Posture Card
+    const scoreEl = document.getElementById("posture-score");
+    if (scoreEl) scoreEl.textContent = score;
+
+    const tagEl = document.getElementById("posture-tag");
+    if (tagEl) {
+      tagEl.textContent = level.toUpperCase();
+      tagEl.className = `posture-tag ${level}`;
+    }
+
+    const descEl = document.getElementById("posture-desc");
+    if (descEl) {
+      if (level === "optimal") {
+        descEl.textContent = "All system tripwires, audit streams, and host resources are well within safe operating bounds.";
+      } else if (level === "warning") {
+        descEl.textContent = "Elevated resource consumption or recent permission denials detected. Review alerts below.";
+      } else {
+        descEl.textContent = "Critical security alert or resource exhaustion detected. Immediate administrator review recommended.";
+      }
+    }
+
+    // Update Resource Metrics
+    const cpuVal = metrics.cpu_percent ?? 0;
+    const memVal = metrics.memory_percent ?? 0;
+    const diskVal = metrics.disk_percent ?? 0;
+    const procVal = metrics.process_count ?? 0;
+
+    document.getElementById("metric-cpu-val").textContent = `${cpuVal}%`;
+    document.getElementById("meter-cpu").style.width = `${Math.min(100, cpuVal)}%`;
+
+    document.getElementById("metric-mem-val").textContent = `${memVal}% (${metrics.memory_used_mb || 0} / ${metrics.memory_total_mb || 0} MB)`;
+    document.getElementById("meter-mem").style.width = `${Math.min(100, memVal)}%`;
+
+    document.getElementById("metric-disk-val").textContent = `${diskVal}% (${metrics.disk_free_gb || 0} GB free)`;
+    document.getElementById("meter-disk").style.width = `${Math.min(100, diskVal)}%`;
+
+    document.getElementById("metric-proc-val").textContent = `${procVal} active processes`;
+
+    // Update Alerts List
+    const alertsList = document.getElementById("alerts-list");
+    alertsList.innerHTML = "";
+
+    const alertsBadge = document.getElementById("alerts-count-badge");
+    alertsBadge.textContent = `${alerts.length} Alert${alerts.length === 1 ? "" : "s"}`;
+
+    if (alerts.length === 0) {
+      alertsList.innerHTML = `<div class="empty-state">✓ No active security alerts or tripwire triggers. System is running securely.</div>`;
+    } else {
+      alerts.forEach((alert) => {
+        const item = document.createElement("div");
+        item.className = `alert-item ${alert.severity || "info"}`;
+        const timeStr = alert.timestamp ? new Date(alert.timestamp * 1000).toLocaleTimeString() : "--";
+
+        item.innerHTML = `
+          <div class="alert-header">
+            <span class="alert-sev-badge ${alert.severity || "info"}">${(alert.severity || "info").toUpperCase()}</span>
+            <span class="alert-source">[${escapeHtml(alert.source || "guard")}]</span>
+            <span class="alert-time">${timeStr}</span>
+          </div>
+          <div class="alert-msg">${escapeHtml(alert.message)}</div>
+        `;
+        alertsList.appendChild(item);
+      });
+    }
+  } catch (err) {
+    console.error("Failed to load guard data", err);
+  }
+}
+
+// =============================================================================
+// 3. Autonomous Task Scheduler (Phase 3)
+// =============================================================================
+
+function initScheduler() {
+  document.getElementById("refresh-tasks-btn").addEventListener("click", loadScheduledTasks);
+
+  const modal = document.getElementById("add-task-modal");
+  document.getElementById("open-add-task-modal").addEventListener("click", () => {
+    modal.classList.add("open");
+  });
+  document.getElementById("close-task-modal").addEventListener("click", () => {
+    modal.classList.remove("open");
+  });
+  document.getElementById("cancel-task-btn").addEventListener("click", () => {
+    modal.classList.remove("open");
+  });
+
+  // Action type selector toggle
+  const actionSelect = document.getElementById("task-action-type");
+  const toolField = document.getElementById("task-tool-field");
+  const intentField = document.getElementById("task-intent-field");
+
+  actionSelect.addEventListener("change", () => {
+    const val = actionSelect.value;
+    if (val === "tool") {
+      toolField.style.display = "block";
+      intentField.style.display = "none";
+    } else if (val === "intent") {
+      toolField.style.display = "none";
+      intentField.style.display = "block";
+    } else {
+      toolField.style.display = "none";
+      intentField.style.display = "none";
+    }
+  });
+
+  // Add Task Form submission
+  document.getElementById("add-task-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = document.getElementById("task-name").value.trim();
+    const action_type = actionSelect.value;
+    const interval_seconds = parseInt(document.getElementById("task-interval").value, 10);
+
+    let payload = {};
+    if (action_type === "tool") {
+      const toolName = document.getElementById("task-tool-name").value.trim() || "network.check";
+      payload = { action: toolName, params: {} };
+    } else if (action_type === "intent") {
+      const intentText = document.getElementById("task-intent-text").value.trim();
+      payload = { text: intentText };
+    } else if (action_type === "system") {
+      payload = { action: "guard.scan" };
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/scheduler/tasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, action_type, payload, interval_seconds, enabled: true }),
+      });
+      if (!res.ok) throw new Error("Failed to create task");
+
+      modal.classList.remove("open");
+      document.getElementById("add-task-form").reset();
+      loadScheduledTasks();
+    } catch (err) {
+      alert(`Error creating task: ${err.message}`);
+    }
+  });
+}
+
+async function loadScheduledTasks() {
+  try {
+    const res = await fetch(`${API_BASE}/scheduler/tasks`);
+    const data = await res.json();
+    renderTasksGrid(data.tasks || []);
+  } catch (err) {
+    console.error("Failed to load tasks", err);
+  }
+}
+
+function renderTasksGrid(tasks) {
+  const grid = document.getElementById("tasks-grid");
+  grid.innerHTML = "";
+
+  if (tasks.length === 0) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column: 1 / -1;">No scheduled tasks registered. Click '+ Add Scheduled Task' to create one.</div>`;
+    return;
+  }
+
+  tasks.forEach((task) => {
+    const card = document.createElement("div");
+    card.className = `task-card ${task.enabled ? "active" : "disabled"}`;
+
+    const isEnabled = task.enabled;
+    const statusClass = task.last_status === "ok" ? "ok" : (task.last_status === "pending" ? "pending" : "error");
+
+    card.innerHTML = `
+      <div class="task-card-header">
+        <div>
+          <span class="task-state-indicator ${isEnabled ? "enabled" : "disabled"}"></span>
+          <span class="task-name">${escapeHtml(task.name)}</span>
+        </div>
+        <span class="task-id-tag">${escapeHtml(task.id)}</span>
+      </div>
+
+      <div class="task-meta-row">
+        <span class="task-type-badge">${escapeHtml(task.action_type.toUpperCase())}</span>
+        <span class="task-interval-badge">Every ${task.interval_seconds}s</span>
+        <span class="task-due-badge">${isEnabled ? `Due in ${Math.round(task.due_in_seconds)}s` : "Paused"}</span>
+      </div>
+
+      <div class="task-stats-box">
+        <div class="stat-line">
+          <span>Execution Count:</span>
+          <strong>${task.run_count}</strong>
+        </div>
+        <div class="stat-line">
+          <span>Status:</span>
+          <span class="status-pill-small ${statusClass}">${task.last_status.toUpperCase()}</span>
+        </div>
+        ${task.last_result ? `<div class="stat-result">${escapeHtml(task.last_result)}</div>` : ""}
+      </div>
+
+      <div class="task-actions-row">
+        <button class="btn-task-action run-btn" title="Trigger execution now">▶ Run Now</button>
+        <button class="btn-task-action toggle-btn" title="Toggle pause or resume">${isEnabled ? "⏸ Pause" : "▶ Resume"}</button>
+        <button class="btn-task-action delete-btn" title="Delete task">🗑</button>
+      </div>
+    `;
+
+    // Action listeners
+    card.querySelector(".run-btn").addEventListener("click", async () => {
+      try {
+        const btn = card.querySelector(".run-btn");
+        btn.textContent = "...";
+        await fetch(`${API_BASE}/scheduler/tasks/${encodeURIComponent(task.id)}/run`, { method: "POST" });
+        loadScheduledTasks();
+      } catch (err) {
+        alert(`Run failed: ${err.message}`);
+      }
+    });
+
+    card.querySelector(".toggle-btn").addEventListener("click", async () => {
+      try {
+        await fetch(`${API_BASE}/scheduler/tasks/${encodeURIComponent(task.id)}/toggle`, { method: "POST" });
+        loadScheduledTasks();
+      } catch (err) {
+        alert(`Toggle failed: ${err.message}`);
+      }
+    });
+
+    card.querySelector(".delete-btn").addEventListener("click", async () => {
+      if (!confirm(`Delete scheduled task '${task.name}'?`)) return;
+      try {
+        await fetch(`${API_BASE}/scheduler/tasks/${encodeURIComponent(task.id)}`, { method: "DELETE" });
+        loadScheduledTasks();
+      } catch (err) {
+        alert(`Delete failed: ${err.message}`);
+      }
+    });
+
+    grid.appendChild(card);
+  });
+}
+
+// =============================================================================
+// 4. Tools Catalog & Direct Execution
 // =============================================================================
 
 function initTools() {
@@ -306,7 +615,6 @@ function openToolModal(tool) {
   const container = document.getElementById("modal-params-container");
   container.innerHTML = "";
 
-  // Render parameter input fields
   const params = tool.parameters || {};
   Object.keys(params).forEach((paramName) => {
     const typeHint = params[paramName];
@@ -352,7 +660,7 @@ function closeToolModal() {
 }
 
 // =============================================================================
-// 3. Memory & Facts
+// 5. Memory & Facts
 // =============================================================================
 
 function initMemory() {
@@ -413,7 +721,7 @@ function renderFactsList(facts) {
   list.innerHTML = "";
 
   if (facts.length === 0) {
-    list.innerHTML = `<div style="color: var(--text-dim); text-align: center; padding: 32px;">No memory facts recorded yet.</div>`;
+    list.innerHTML = `<div class="empty-state">No memory facts recorded yet.</div>`;
     return;
   }
 
@@ -445,7 +753,7 @@ function renderSearchResults(results) {
   list.innerHTML = "";
 
   if (results.length === 0) {
-    list.innerHTML = `<div style="color: var(--text-dim); text-align: center; padding: 32px;">No matches found for search query.</div>`;
+    list.innerHTML = `<div class="empty-state">No matches found for search query.</div>`;
     return;
   }
 
@@ -455,10 +763,10 @@ function renderSearchResults(results) {
     item.innerHTML = `
       <div>
         <div class="fact-key">${escapeHtml(r.key || `Memory #${r.id}`)}</div>
-        <div class="fact-value">${escapeHtml(JSON.stringify(r.content))}</div>
+        <div class="fact-value">${escapeHtml(JSON.stringify(r.content || r.snippet))}</div>
       </div>
       <div>
-        <span class="meta-duration">Score: ${r.score}</span>
+        <span class="meta-duration">Score: ${r.score || r.relevance}</span>
       </div>
     `;
     list.appendChild(item);
@@ -466,7 +774,7 @@ function renderSearchResults(results) {
 }
 
 // =============================================================================
-// 4. Audit & Security Stream
+// 6. Audit & Security Stream
 // =============================================================================
 
 function initAudit() {
@@ -488,7 +796,7 @@ function renderAuditStream(entries) {
   stream.innerHTML = "";
 
   if (entries.length === 0) {
-    stream.innerHTML = `<div style="color: var(--text-dim); text-align: center; padding: 32px;">No audit logs recorded yet.</div>`;
+    stream.innerHTML = `<div class="empty-state">No audit logs recorded yet.</div>`;
     return;
   }
 
@@ -496,12 +804,12 @@ function renderAuditStream(entries) {
     const card = document.createElement("div");
     card.className = "audit-card";
     const statusClass = entry.status || "ok";
-    const timeFormatted = entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : "--";
+    const timeFormatted = entry.timestamp ? new Date(entry.timestamp * 1000).toLocaleTimeString() : "--";
 
     card.innerHTML = `
       <div class="audit-left">
         <span class="audit-status ${statusClass}">${escapeHtml(statusClass.toUpperCase())}</span>
-        <strong>${escapeHtml(entry.action)}</strong>
+        <strong>${escapeHtml(entry.event || entry.action)}</strong>
       </div>
       <span class="audit-time">${timeFormatted}</span>
     `;

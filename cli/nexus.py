@@ -65,6 +65,21 @@ def parse_arguments() -> argparse.Namespace:
         action="store_true",
         help="Display stored memory facts and user preferences",
     )
+    parser.add_argument(
+        "--tui",
+        action="store_true",
+        help="Launch the rich terminal user interface console",
+    )
+    parser.add_argument(
+        "--guard",
+        action="store_true",
+        help="Display security guard posture and active anomaly alerts",
+    )
+    parser.add_argument(
+        "--schedule",
+        action="store_true",
+        help="Display autonomous task scheduler status and jobs",
+    )
     return parser.parse_args()
 
 
@@ -196,10 +211,56 @@ def show_facts(base_url: str) -> None:
         print(f"[Error] nexusd is not running at {base_url}.")
 
 
+def show_guard(base_url: str) -> None:
+    """Fetch and print Security Guard status and active alerts."""
+    try:
+        resp = requests.get(f"{base_url}/guard/status", timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            posture = data.get("posture", data)
+            score = posture.get("score", 100)
+            level = posture.get("level", "optimal")
+            metrics = posture.get("metrics", {})
+            print(f"==> Nexus Security Guard Posture: {score}% ({level.upper()})")
+            print(f"  CPU Load:      {metrics.get('cpu_percent')}%")
+            print(f"  RAM Usage:     {metrics.get('memory_percent')}% ({metrics.get('memory_used_mb')}MB used)")
+            print(f"  Disk Usage:    {metrics.get('disk_percent')}% ({metrics.get('disk_free_gb')}GB free)")
+            print(f"  Host Procs:    {metrics.get('process_count')} active")
+
+            alerts_resp = requests.get(f"{base_url}/guard/alerts?limit=10", timeout=5)
+            alerts = alerts_resp.json().get("alerts", []) if alerts_resp.status_code == 200 else []
+            print(f"\n  Active Alerts: {len(alerts)}")
+            for a in alerts:
+                print(f"  • [{a.get('severity', 'info').upper()}] {a.get('message')}")
+        else:
+            print(f"[Error] Failed to fetch security posture: {resp.status_code}")
+    except requests.exceptions.ConnectionError:
+        print(f"[Error] nexusd is not running at {base_url}.")
+
+
+def show_schedule(base_url: str) -> None:
+    """Fetch and print autonomous task scheduler jobs."""
+    try:
+        resp = requests.get(f"{base_url}/scheduler/tasks", timeout=5)
+        if resp.status_code == 200:
+            tasks = resp.json().get("tasks", [])
+            print(f"==> Nexus Scheduled Tasks ({len(tasks)} registered)")
+            print(f"{'ID':<18} {'Name':<30} {'Type':<10} {'Interval':<10} {'Due In':<10} {'Status':<10}")
+            print("-" * 88)
+            for t in tasks:
+                state = "active" if t.get("enabled") else "paused"
+                due_in = f"{round(t.get('due_in_seconds', 0))}s"
+                print(f"{t.get('id'):<18} {t.get('name')[:28]:<30} {t.get('action_type'):<10} {str(t.get('interval_seconds')) + 's':<10} {due_in:<10} {t.get('last_status'):<10}")
+        else:
+            print(f"[Error] Failed to list scheduled tasks: {resp.status_code}")
+    except requests.exceptions.ConnectionError:
+        print(f"[Error] nexusd is not running at {base_url}.")
+
+
 def run_interactive_loop(base_url: str, prefer: str | None) -> None:
     """Run interactive REPL terminal session."""
     mode_tag = f" [{prefer}]" if prefer else ""
-    print(f"Nexus AIOS CLI (Phase 2){mode_tag}")
+    print(f"Nexus AIOS CLI (Phase 3){mode_tag}")
     print("Type your intent or 'exit' / 'quit' to close. Use Ctrl+C to cancel line.")
     print("-" * 55)
 
@@ -239,6 +300,24 @@ def main() -> None:
         prefer = "local"
     elif args.cloud:
         prefer = "cloud"
+
+    if args.tui:
+        try:
+            from ui.tui.app import NexusTUI
+            tui = NexusTUI(host=args.host, port=args.port)
+            tui.run()
+            sys.exit(0)
+        except Exception as err:
+            print(f"[Error] Failed to launch TUI: {err}", file=sys.stderr)
+            sys.exit(1)
+
+    if args.guard:
+        show_guard(base_url)
+        sys.exit(0)
+
+    if args.schedule:
+        show_schedule(base_url)
+        sys.exit(0)
 
     if args.status:
         show_status(base_url)

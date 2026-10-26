@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nexus AIOS | Autonomous Operating System Console</title>
-  <meta name="description" content="Nexus AIOS Web Console - Natural Language Intent Terminal, Autonomous Tool Dispatcher, and Memory Management.">
+  <meta name="description" content="Nexus AIOS Web Console - Natural Language Intent Terminal, Autonomous Tool Dispatcher, Task Scheduler, and Proactive Security Guard.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -21,7 +21,7 @@
         </div>
         <div class="brand-titles">
           <h1 class="brand-name">NEXUS <span>AIOS</span></h1>
-          <span class="brand-sub">Autonomous Operating System Kernel v0.2.0</span>
+          <span class="brand-sub">Autonomous Operating System Kernel v0.3.0</span>
         </div>
       </div>
 
@@ -33,6 +33,10 @@
         <div class="provider-pill" id="provider-pill">
           <span class="provider-icon">⚡</span>
           <span id="provider-name">Router: Auto</span>
+        </div>
+        <div class="guard-pill" id="guard-status-pill" title="System Security Posture">
+          <span id="guard-pill-icon">🛡️</span>
+          <span id="guard-pill-text">100% Optimal</span>
         </div>
         <div class="uptime-badge" id="uptime-badge" title="Daemon Uptime">
           ⏱️ <span id="uptime-text">--s</span>
@@ -48,6 +52,16 @@
           <span class="nav-icon">💬</span>
           <span class="nav-label">Intent Console</span>
         </button>
+        <button class="nav-tab" id="tab-btn-guard" data-tab="guard">
+          <span class="nav-icon">🛡️</span>
+          <span class="nav-label">Security Guard</span>
+          <span class="nav-badge" id="guard-score-badge">100%</span>
+        </button>
+        <button class="nav-tab" id="tab-btn-scheduler" data-tab="scheduler">
+          <span class="nav-icon">⏱️</span>
+          <span class="nav-label">Scheduler</span>
+          <span class="nav-badge" id="tasks-count-badge">0</span>
+        </button>
         <button class="nav-tab" id="tab-btn-tools" data-tab="tools">
           <span class="nav-icon">🛠️</span>
           <span class="nav-label">Tools Catalog</span>
@@ -59,8 +73,8 @@
           <span class="nav-badge" id="facts-count-badge">0</span>
         </button>
         <button class="nav-tab" id="tab-btn-audit" data-tab="audit">
-          <span class="nav-icon">🛡️</span>
-          <span class="nav-label">Security & Audit</span>
+          <span class="nav-icon">📜</span>
+          <span class="nav-label">Audit Log</span>
         </button>
       </nav>
 
@@ -75,15 +89,15 @@
                 <div class="welcome-header">
                   <div class="ai-avatar">Ψ</div>
                   <div>
-                    <h3>Nexus Core Initialized</h3>
-                    <p>Natural language intent engine ready with safe tool execution and persistent memory.</p>
+                    <h3>Nexus Core v0.3.0 Active</h3>
+                    <p>Natural language intent engine, proactive security guard, and autonomous task scheduler online.</p>
                   </div>
                 </div>
                 <div class="quick-prompts">
                   <button class="prompt-chip" data-prompt="check network connectivity">🌐 Check Network</button>
-                  <button class="prompt-chip" data-prompt="list files in current directory">📁 List Files</button>
                   <button class="prompt-chip" data-prompt="query local IP address and hostname">💻 Query IP & Host</button>
-                  <button class="prompt-chip" data-prompt="Who are you and what tools do you have?">🤖 System Introspection</button>
+                  <button class="prompt-chip" data-prompt="list files in current directory">📁 List Files</button>
+                  <button class="prompt-chip" data-prompt="run a security scan of the system">🛡️ Security Scan</button>
                 </div>
               </div>
             </div>
@@ -112,7 +126,102 @@
           </div>
         </section>
 
-        <!-- 2. TOOLS CATALOG VIEW -->
+        <!-- 2. SECURITY GUARD VIEW (Phase 3) -->
+        <section class="tab-pane" id="pane-guard">
+          <div class="section-header">
+            <div>
+              <h2>Proactive Security Guard</h2>
+              <p>Real-time system resource watchdog, tripwire verification, and audit anomaly detection.</p>
+            </div>
+            <div class="actions-group">
+              <button class="btn-secondary" id="clear-alerts-btn">Clear Alerts</button>
+              <button class="btn-primary" id="run-guard-scan-btn">⚡ Run Security Scan</button>
+            </div>
+          </div>
+
+          <div class="guard-grid">
+            <!-- Security Posture Card -->
+            <div class="guard-card posture-card" id="posture-card">
+              <div class="posture-header">
+                <h3>Overall Security Score</h3>
+                <span class="posture-tag optimal" id="posture-tag">OPTIMAL</span>
+              </div>
+              <div class="score-display">
+                <span class="score-number" id="posture-score">100</span>
+                <span class="score-max">/ 100</span>
+              </div>
+              <p class="posture-desc" id="posture-desc">All system parameters within safe thresholds. No anomalous execution patterns detected.</p>
+            </div>
+
+            <!-- Resource Watchdog Cards -->
+            <div class="guard-card resource-card">
+              <h3>System Resource Watchdog</h3>
+              <div class="resource-metrics">
+                <div class="metric-row">
+                  <div class="metric-info">
+                    <span>CPU Utilization</span>
+                    <span id="metric-cpu-val">0%</span>
+                  </div>
+                  <div class="meter-bar"><div class="meter-fill" id="meter-cpu" style="width: 0%"></div></div>
+                </div>
+
+                <div class="metric-row">
+                  <div class="metric-info">
+                    <span>RAM Utilization</span>
+                    <span id="metric-mem-val">0% (0 / 0 MB)</span>
+                  </div>
+                  <div class="meter-bar"><div class="meter-fill" id="meter-mem" style="width: 0%"></div></div>
+                </div>
+
+                <div class="metric-row">
+                  <div class="metric-info">
+                    <span>Disk Storage</span>
+                    <span id="metric-disk-val">0% (0 GB free)</span>
+                  </div>
+                  <div class="meter-bar"><div class="meter-fill" id="meter-disk" style="width: 0%"></div></div>
+                </div>
+
+                <div class="metric-row">
+                  <div class="metric-info">
+                    <span>Host Processes</span>
+                    <span id="metric-proc-val">0 active</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Active Security Alerts -->
+          <div class="guard-alerts-section">
+            <div class="section-subheader">
+              <h3>Active Security Alerts & Anomaly Feed</h3>
+              <span class="badge" id="alerts-count-badge">0 Alerts</span>
+            </div>
+            <div class="alerts-list" id="alerts-list">
+              <!-- Dynamically populated alerts -->
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. SCHEDULER VIEW (Phase 3) -->
+        <section class="tab-pane" id="pane-scheduler">
+          <div class="section-header">
+            <div>
+              <h2>Autonomous Task Scheduler</h2>
+              <p>Interval and recurring background jobs for maintenance, automated health checks, and scheduled intents.</p>
+            </div>
+            <div class="actions-group">
+              <button class="btn-secondary" id="refresh-tasks-btn">↻ Refresh</button>
+              <button class="btn-primary" id="open-add-task-modal">+ Add Scheduled Task</button>
+            </div>
+          </div>
+
+          <div class="tasks-grid" id="tasks-grid">
+            <!-- Dynamically populated task cards -->
+          </div>
+        </section>
+
+        <!-- 4. TOOLS CATALOG VIEW -->
         <section class="tab-pane" id="pane-tools">
           <div class="section-header">
             <div>
@@ -128,7 +237,7 @@
           </div>
         </section>
 
-        <!-- 3. MEMORY STORE VIEW -->
+        <!-- 5. MEMORY STORE VIEW -->
         <section class="tab-pane" id="pane-memory">
           <div class="section-header">
             <div>
@@ -148,12 +257,12 @@
           </div>
         </section>
 
-        <!-- 4. SECURITY & AUDIT VIEW -->
+        <!-- 6. SECURITY & AUDIT VIEW -->
         <section class="tab-pane" id="pane-audit">
           <div class="section-header">
             <div>
-              <h2>Audit & Security Log</h2>
-              <p>Cryptographically traceable append-only log of every intent and tool execution.</p>
+              <h2>Cryptographic Audit Log</h2>
+              <p>Cryptographically traceable append-only log of every intent, tool execution, and security event.</p>
             </div>
             <button class="btn-secondary" id="refresh-audit-btn">↻ Refresh Log</button>
           </div>
@@ -210,6 +319,46 @@
         <div class="modal-footer">
           <button type="button" class="btn-secondary" id="cancel-fact-btn">Cancel</button>
           <button type="submit" class="btn-primary">Save Fact</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Add Scheduled Task (Phase 3) -->
+  <div class="modal-backdrop" id="add-task-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Create Scheduled Task</h3>
+        <button class="modal-close" id="close-task-modal">✕</button>
+      </div>
+      <form id="add-task-form" class="modal-body">
+        <div class="form-group">
+          <label for="task-name">Task Name</label>
+          <input type="text" id="task-name" placeholder="e.g. Network Health Check" required />
+        </div>
+        <div class="form-group">
+          <label for="task-action-type">Action Type</label>
+          <select id="task-action-type" required>
+            <option value="tool">Tool Execution</option>
+            <option value="intent">Natural Language Intent</option>
+            <option value="system">System Guard Scan</option>
+          </select>
+        </div>
+        <div class="form-group" id="task-tool-field">
+          <label for="task-tool-name">Tool Name (for Tool Action)</label>
+          <input type="text" id="task-tool-name" placeholder="e.g. network.check, files.list" value="network.check" />
+        </div>
+        <div class="form-group" id="task-intent-field" style="display: none;">
+          <label for="task-intent-text">Intent Text</label>
+          <input type="text" id="task-intent-text" placeholder="e.g. check system storage and network" />
+        </div>
+        <div class="form-group">
+          <label for="task-interval">Interval (Seconds)</label>
+          <input type="number" id="task-interval" placeholder="e.g. 300" min="10" value="300" required />
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" id="cancel-task-btn">Cancel</button>
+          <button type="submit" class="btn-primary">Create Task</button>
         </div>
       </form>
     </div>

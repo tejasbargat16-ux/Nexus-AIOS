@@ -27,7 +27,7 @@ logger = logging.getLogger("nexusd")
 
 def main() -> None:
     """Main execution entrypoint for nexusd."""
-    logger.info("Initializing Nexus AIOS Daemon (Phase 2)...")
+    logger.info("Initializing Nexus AIOS Daemon (Phase 3)...")
 
     try:
         config = load_config()
@@ -35,7 +35,7 @@ def main() -> None:
         logger.error("Failed to load configuration: %s", err)
         sys.exit(1)
 
-    app = create_app(config=config)
+    app = create_app(config=config, start_scheduler=True)
     host = config.api.host
     port = config.api.port
 
@@ -56,6 +56,10 @@ def main() -> None:
             return
         shutdown_event.set()
         logger.info("Shutdown signal (%s) received. Stopping nexusd cleanly...", signum)
+        if hasattr(app, "scheduler"):
+            app.scheduler.stop()
+        if hasattr(app, "guard"):
+            app.guard.stop_monitor()
         audit_logger.log("daemon.shutdown", {"signal": signum}, status="ok")
         # Run server.shutdown in separate thread to avoid deadlock
         threading.Thread(target=server.shutdown, daemon=True).start()

@@ -1,0 +1,25 @@
+[Unit]
+Description=Nexus AIOS Kernel Daemon
+Documentation=https://github.com/tejasbargat16-ux/Nexus-AIOS
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/nexus-aios
+Environment="PYTHONUNBUFFERED=1"
+Environment="NEXUS_API_HOST=0.0.0.0"
+Environment="NEXUS_API_PORT=8765"
+EnvironmentFile=-/etc/nexus/nexus.env
+ExecStart=/opt/nexus-aios/venv/bin/python -m nexusd.main
+Restart=always
+RestartSec=5
+KillMode=mixed
+TimeoutStopSec=10
+LimitNOFILE=65535
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

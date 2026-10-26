@@ -1,0 +1,22 @@
+[Unit]
+Description=Nexus AIOS Security Guard & Anomaly Monitor
+Documentation=https://github.com/tejasbargat16-ux/Nexus-AIOS
+After=nexusd.service
+Wants=nexusd.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/nexus-aios
+Environment="PYTHONUNBUFFERED=1"
+EnvironmentFile=-/etc/nexus/nexus.env
+ExecStart=/opt/nexus-aios/venv/bin/python -m nexusd.guard --monitor --interval 30
+Restart=always
+RestartSec=10
+KillMode=mixed
+TimeoutStopSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

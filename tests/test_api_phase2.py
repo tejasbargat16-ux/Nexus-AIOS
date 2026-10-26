@@ -47,7 +47,7 @@ def test_api_phase2_status_endpoint(app_phase2):
     resp = client.get("/status")
     assert resp.status_code == 200
     data = resp.get_json()
-    assert data["version"] == "0.2.0-phase2"
+    assert data["version"] in ("0.2.0-phase2", "0.3.0-phase3")
     assert "components" in data
     assert data["components"]["tools_registered"] >= 15
 

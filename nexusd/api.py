@@ -17,9 +17,11 @@ from flask import Flask, jsonify, request, send_from_directory
 
 from nexusd.audit import audit_logger
 from nexusd.config import NexusConfig, load_config
+from nexusd.guard import SecurityGuard
 from nexusd.memory.store import MemoryStore
 from nexusd.permissions.engine import PermissionEngine
 from nexusd.router import LLMRouter
+from nexusd.scheduler import ScheduledTask, Scheduler
 from nexusd.tools import TOOL_REGISTRY, execute_tool, list_tools
 
 logger = logging.getLogger("nexusd.api")
@@ -63,16 +65,22 @@ def create_app(
     router: LLMRouter | None = None,
     permissions: PermissionEngine | None = None,
     memory: MemoryStore | None = None,
+    scheduler: Scheduler | None = None,
+    guard: SecurityGuard | None = None,
+    start_scheduler: bool = False,
 ) -> Flask:
     """
     Application factory initializing Flask API with configuration, router,
-    permission engine, and memory store.
+    permission engine, memory store, task scheduler, and security guard.
 
     Args:
         config: System configuration object.
         router: LLMRouter instance.
         permissions: PermissionEngine instance.
         memory: MemoryStore instance.
+        scheduler: Scheduler instance.
+        guard: SecurityGuard instance.
+        start_scheduler: Flag to start background worker thread.
 
     Returns:
         Flask: Configured application instance.
@@ -84,6 +92,31 @@ def create_app(
     perm_engine = permissions or PermissionEngine()
     mem_store = memory or MemoryStore()
 
+    sec_guard = guard or SecurityGuard(audit_log_path=audit_logger.log_path)
+
+    def _scheduler_executor(task: ScheduledTask) -> Any:
+        if task.action_type == "tool":
+            action = task.payload.get("action", "")
+            params = task.payload.get("params", {})
+            return execute_tool(action, params)
+        elif task.action_type == "system" and task.payload.get("action") == "guard.scan":
+            return sec_guard.scan()
+        elif task.action_type == "intent":
+            text = task.payload.get("text", "")
+            return f"Processed scheduled intent: {text}"
+        return f"Unknown action: {task.action_type}"
+
+    db_path = mem_store.db_path if mem_store else None
+    task_scheduler = scheduler or Scheduler(db_path=db_path, executor_fn=_scheduler_executor)
+
+    if start_scheduler:
+        task_scheduler.start()
+        sec_guard.start_monitor(interval_seconds=60)
+
+    # Attach to app instance
+    app.scheduler = task_scheduler  # type: ignore[attr-defined]
+    app.guard = sec_guard          # type: ignore[attr-defined]
+
     @app.route("/", methods=["GET"])
     def index() -> Any:
         """Serve responsive web UI."""
@@ -93,7 +126,7 @@ def create_app(
         return jsonify({
             "service": "nexusd",
             "status": "ok",
-            "version": "0.2.0-phase2",
+            "version": "0.3.0-phase3",
             "ui": "http://127.0.0.1:8765/index.html",
         }), 200
 
@@ -102,15 +135,19 @@ def create_app(
         """Return daemon health, uptime, providers, and component status."""
         uptime = round(time.time() - DAEMON_START_TIME, 1)
         facts_count = len(mem_store.list_facts())
+        guard_status = sec_guard.get_status()
         return jsonify({
             "status": "ok",
             "service": "nexusd",
-            "version": "0.2.0-phase2",
+            "version": "0.3.0-phase3",
             "uptime_seconds": uptime,
             "components": {
                 "tools_registered": len(TOOL_REGISTRY),
                 "stored_facts": facts_count,
                 "permission_rules": len(perm_engine.rules),
+                "scheduled_tasks": len(task_scheduler.list_tasks()),
+                "security_score": guard_status.get("score", 100),
+                "security_level": guard_status.get("level", "optimal"),
             },
             "providers": {
                 "preferred": cfg.router.prefer,
@@ -425,5 +462,119 @@ def create_app(
 
         entries = audit_logger.get_recent(limit=limit)
         return jsonify({"entries": entries, "count": len(entries)}), 200
+
+    # =========================================================================
+    # Scheduler Endpoints (Phase 3)
+    # =========================================================================
+
+    @app.route("/scheduler/tasks", methods=["GET"])
+    def get_scheduled_tasks() -> Any:
+        """List all registered scheduled tasks."""
+        tasks = [t.to_dict() for t in task_scheduler.list_tasks()]
+        return jsonify({"tasks": tasks, "count": len(tasks)}), 200
+
+    @app.route("/scheduler/tasks", methods=["POST"])
+    def add_scheduled_task() -> Any:
+        """Create a new scheduled task."""
+        data = request.get_json(silent=True) or {}
+        name = data.get("name", "").strip()
+        action_type = data.get("action_type", "").strip()
+        payload = data.get("payload", {})
+        interval_seconds = data.get("interval_seconds")
+        enabled = data.get("enabled", True)
+
+        if not name or not action_type or not interval_seconds:
+            return jsonify({"error": "Missing required fields: 'name', 'action_type', 'interval_seconds'"}), 400
+
+        try:
+            interval = int(interval_seconds)
+            if interval < 1:
+                return jsonify({"error": "interval_seconds must be at least 1"}), 400
+        except ValueError:
+            return jsonify({"error": "interval_seconds must be an integer"}), 400
+
+        task = task_scheduler.add_task(
+            name=name,
+            action_type=action_type,
+            payload=payload,
+            interval_seconds=interval,
+            enabled=bool(enabled),
+        )
+        audit_logger.log("scheduler.task_created", {"id": task.id, "name": name}, status="ok")
+        return jsonify({"status": "created", "task": task.to_dict()}), 201
+
+    @app.route("/scheduler/tasks/<task_id>", methods=["DELETE"])
+    def delete_scheduled_task(task_id: str) -> Any:
+        """Delete a scheduled task by ID."""
+        success = task_scheduler.remove_task(task_id)
+        if success:
+            audit_logger.log("scheduler.task_deleted", {"id": task_id}, status="ok")
+            return jsonify({"status": "deleted", "id": task_id}), 200
+        return jsonify({"error": f"Task '{task_id}' not found"}), 404
+
+    @app.route("/scheduler/tasks/<task_id>/run", methods=["POST"])
+    def run_scheduled_task(task_id: str) -> Any:
+        """Manually trigger immediate execution of a scheduled task."""
+        result = task_scheduler.trigger_task(task_id)
+        if result.get("status") == "error" and "not found" in result.get("message", ""):
+            return jsonify(result), 404
+        audit_logger.log("scheduler.task_triggered", {"id": task_id, "status": result.get("status")}, status="ok")
+        return jsonify(result), 200
+
+    @app.route("/scheduler/tasks/<task_id>/toggle", methods=["POST"])
+    def toggle_scheduled_task(task_id: str) -> Any:
+        """Toggle task enabled state."""
+        data = request.get_json(silent=True) or {}
+        explicit_state = data.get("enabled")
+        updated = task_scheduler.toggle_task(task_id, explicit_state)
+        if not updated:
+            return jsonify({"error": f"Task '{task_id}' not found"}), 404
+        return jsonify({"status": "updated", "task": updated.to_dict()}), 200
+
+    @app.route("/scheduler/status", methods=["GET"])
+    def get_scheduler_status() -> Any:
+        """Return scheduler worker status and stats."""
+        tasks = task_scheduler.list_tasks()
+        active_count = sum(1 for t in tasks if t.enabled)
+        return jsonify({
+            "status": "ok",
+            "total_tasks": len(tasks),
+            "active_tasks": active_count,
+        }), 200
+
+    # =========================================================================
+    # Security Guard Endpoints (Phase 3)
+    # =========================================================================
+
+    @app.route("/guard/status", methods=["GET"])
+    def get_guard_status() -> Any:
+        """Retrieve security guard posture, score, and resource metrics."""
+        status = sec_guard.get_status()
+        return jsonify(status), 200
+
+    @app.route("/guard/alerts", methods=["GET"])
+    def get_guard_alerts() -> Any:
+        """Retrieve active security alerts."""
+        limit_arg = request.args.get("limit", "50")
+        try:
+            limit = int(limit_arg)
+        except ValueError:
+            limit = 50
+        alerts = sec_guard.get_alerts(limit=limit)
+        return jsonify({"alerts": alerts, "count": len(alerts)}), 200
+
+    @app.route("/guard/scan", methods=["POST"])
+    def run_guard_scan() -> Any:
+        """Execute on-demand comprehensive security and integrity scan."""
+        report = sec_guard.scan()
+        audit_logger.log("guard.scan_executed", {"score": report["posture"]["score"]}, status="ok")
+        return jsonify(report), 200
+
+    @app.route("/guard/alerts/clear", methods=["POST"])
+    def clear_guard_alerts() -> Any:
+        """Clear active security alerts."""
+        sec_guard.clear_alerts()
+        audit_logger.log("guard.alerts_cleared", {}, status="ok")
+        return jsonify({"status": "cleared"}), 200
 
     return app
